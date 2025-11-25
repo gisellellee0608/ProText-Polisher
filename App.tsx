@@ -1,6 +1,7 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Header } from './components/Header';
 import { Button } from './components/Button';
+import { ApiKeyModal } from './components/ApiKeyModal';
 import { polishTextWithGemini, transcribeAudioWithGemini } from './services/geminiService';
 import { ProcessingStatus } from './types';
 import { 
@@ -28,6 +29,10 @@ const App: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
   
+  // API Key & Settings State
+  const [apiKey, setApiKey] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
+
   // Audio recording state
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -37,15 +42,34 @@ const App: React.FC = () => {
   // Ref for auto-scrolling to output on mobile
   const outputRef = useRef<HTMLDivElement>(null);
 
+  // Load API Key on Mount
+  useEffect(() => {
+    const storedKey = localStorage.getItem('gemini_api_key');
+    if (storedKey) {
+      setApiKey(storedKey);
+    } else {
+      setShowSettings(true);
+    }
+  }, []);
+
+  const handleSaveApiKey = (key: string) => {
+    setApiKey(key);
+    localStorage.setItem('gemini_api_key', key);
+  };
+
   const handlePolish = useCallback(async () => {
     if (!inputText.trim()) return;
+    if (!apiKey) {
+      setShowSettings(true);
+      return;
+    }
 
     setStatus(ProcessingStatus.PROCESSING);
     setErrorMessage('');
     setCopied(false);
 
     try {
-      const polished = await polishTextWithGemini(inputText, selectedModel);
+      const polished = await polishTextWithGemini(inputText, selectedModel, apiKey);
       setOutputText(polished);
       setStatus(ProcessingStatus.SUCCESS);
       
@@ -59,7 +83,7 @@ const App: React.FC = () => {
       setStatus(ProcessingStatus.ERROR);
       setErrorMessage(error.message || "An unexpected error occurred.");
     }
-  }, [inputText, selectedModel]);
+  }, [inputText, selectedModel, apiKey]);
 
   const handleClear = useCallback(() => {
     setInputText('');
@@ -78,6 +102,10 @@ const App: React.FC = () => {
   }, [outputText]);
 
   const startRecording = useCallback(async () => {
+    if (!apiKey) {
+      setShowSettings(true);
+      return;
+    }
     try {
       setErrorMessage('');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -102,7 +130,7 @@ const App: React.FC = () => {
           reader.onloadend = async () => {
             const base64Audio = (reader.result as string).split(',')[1];
             try {
-              const transcript = await transcribeAudioWithGemini(base64Audio, audioBlob.type);
+              const transcript = await transcribeAudioWithGemini(base64Audio, audioBlob.type, apiKey);
               setInputText(prev => {
                 const spacer = prev && !prev.endsWith(' ') && !prev.endsWith('\n') ? ' ' : '';
                 return prev + spacer + transcript;
@@ -130,7 +158,7 @@ const App: React.FC = () => {
       console.error(e);
       setErrorMessage("Microphone access denied or not available.");
     }
-  }, []);
+  }, [apiKey]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -152,7 +180,14 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col relative">
-      <Header />
+      <Header onOpenSettings={() => setShowSettings(true)} />
+      
+      <ApiKeyModal 
+        isOpen={showSettings} 
+        onClose={() => setShowSettings(false)} 
+        onSave={handleSaveApiKey}
+        currentKey={apiKey}
+      />
 
       <main className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
         
