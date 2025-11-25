@@ -1,0 +1,7 @@
+{
+  "name": "ProText Polisher",
+  "description": "A professional AI text editor that transforms spoken, colloquial transcripts into clean, formal written text while preserving the original meaning.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
