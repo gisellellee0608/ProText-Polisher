@@ -17,16 +17,13 @@ Polish and rewrite the [Oral Text] provided by the user into standard [Written L
 Output ONLY the polished text. Do not include any explanations, preambles, or markdown formatting blocks (like \`\`\`).
 `;
 
-export const polishTextWithGemini = async (inputText: string, model: string = 'gemini-2.5-flash', apiKey: string): Promise<string> => {
-  if (!apiKey) {
-    throw new Error("API Key is missing. Please set it in Settings.");
-  }
+export const polishTextWithGemini = async (inputText: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
   if (!inputText.trim()) {
     throw new Error("Input text cannot be empty.");
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey: apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const response = await ai.models.generateContent({
       model: model,
@@ -49,13 +46,9 @@ export const polishTextWithGemini = async (inputText: string, model: string = 'g
   }
 };
 
-export const transcribeAudioWithGemini = async (audioBase64: string, mimeType: string, apiKey: string): Promise<string> => {
-  if (!apiKey) {
-    throw new Error("API Key is missing. Please set it in Settings.");
-  }
-
+export const transcribeAudioWithGemini = async (audioBase64: string, mimeType: string): Promise<string> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',

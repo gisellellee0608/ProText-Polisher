@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { Header } from './components/Header';
 import { Button } from './components/Button';
 import { polishTextWithGemini, transcribeAudioWithGemini } from './services/geminiService';
@@ -17,13 +17,8 @@ import {
   Square,
   Loader2,
   ChevronDown,
-  Info,
-  X,
-  Key
+  Info
 } from 'lucide-react';
-
-// Attempt to get environment key (works in AI Studio / local env if configured)
-const ENV_API_KEY = process.env.API_KEY || '';
 
 const App: React.FC = () => {
   const [inputText, setInputText] = useState('');
@@ -33,11 +28,6 @@ const App: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
   
-  // API Key & Settings State
-  const [apiKey, setApiKey] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
-  const [tempApiKey, setTempApiKey] = useState('');
-
   // Audio recording state
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -47,43 +37,15 @@ const App: React.FC = () => {
   // Ref for auto-scrolling to output on mobile
   const outputRef = useRef<HTMLDivElement>(null);
 
-  // Initialize API Key from storage or env
-  useEffect(() => {
-    const storedKey = localStorage.getItem('gemini_api_key');
-    if (storedKey) {
-      setApiKey(storedKey);
-      setTempApiKey(storedKey);
-    } else if (ENV_API_KEY) {
-      setApiKey(ENV_API_KEY);
-      setTempApiKey(ENV_API_KEY);
-    } else {
-      // If no key found, prompt user to enter one
-      setShowSettings(true);
-    }
-  }, []);
-
-  const handleSaveSettings = () => {
-    if (tempApiKey.trim()) {
-      setApiKey(tempApiKey.trim());
-      localStorage.setItem('gemini_api_key', tempApiKey.trim());
-      setShowSettings(false);
-      setErrorMessage(''); // Clear any previous auth errors
-    }
-  };
-
   const handlePolish = useCallback(async () => {
     if (!inputText.trim()) return;
-    if (!apiKey) {
-      setShowSettings(true);
-      return;
-    }
 
     setStatus(ProcessingStatus.PROCESSING);
     setErrorMessage('');
     setCopied(false);
 
     try {
-      const polished = await polishTextWithGemini(inputText, selectedModel, apiKey);
+      const polished = await polishTextWithGemini(inputText, selectedModel);
       setOutputText(polished);
       setStatus(ProcessingStatus.SUCCESS);
       
@@ -96,12 +58,8 @@ const App: React.FC = () => {
     } catch (error: any) {
       setStatus(ProcessingStatus.ERROR);
       setErrorMessage(error.message || "An unexpected error occurred.");
-      // If error is related to auth (400/403 often implies key issues), prompt settings
-      if (error.message?.includes('API key') || error.message?.includes('403')) {
-        setShowSettings(true);
-      }
     }
-  }, [inputText, selectedModel, apiKey]);
+  }, [inputText, selectedModel]);
 
   const handleClear = useCallback(() => {
     setInputText('');
@@ -120,11 +78,6 @@ const App: React.FC = () => {
   }, [outputText]);
 
   const startRecording = useCallback(async () => {
-    if (!apiKey) {
-      setShowSettings(true);
-      return;
-    }
-
     try {
       setErrorMessage('');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -149,7 +102,7 @@ const App: React.FC = () => {
           reader.onloadend = async () => {
             const base64Audio = (reader.result as string).split(',')[1];
             try {
-              const transcript = await transcribeAudioWithGemini(base64Audio, audioBlob.type, apiKey);
+              const transcript = await transcribeAudioWithGemini(base64Audio, audioBlob.type);
               setInputText(prev => {
                 const spacer = prev && !prev.endsWith(' ') && !prev.endsWith('\n') ? ' ' : '';
                 return prev + spacer + transcript;
@@ -177,7 +130,7 @@ const App: React.FC = () => {
       console.error(e);
       setErrorMessage("Microphone access denied or not available.");
     }
-  }, [apiKey]);
+  }, []);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -199,83 +152,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col relative">
-      <Header onOpenSettings={() => setShowSettings(true)} />
-
-      {/* Settings Modal */}
-      {showSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative animate-in zoom-in-95 duration-200">
-            <button 
-              onClick={() => setShowSettings(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            
-            <div className="mb-6">
-              <div className="flex items-center space-x-2 mb-2">
-                <div className="bg-indigo-100 p-2 rounded-lg">
-                  <Key className="h-5 w-5 text-indigo-600" />
-                </div>
-                <h2 className="text-xl font-bold text-slate-900">API Setup</h2>
-              </div>
-              <p className="text-slate-600 text-sm">
-                To use ProText Polisher, you need to provide your own Google Gemini API Key. Your key is stored locally in your browser and never sent to our servers.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Gemini API Key
-                </label>
-                <input
-                  type="password"
-                  value={tempApiKey}
-                  onChange={(e) => setTempApiKey(e.target.value)}
-                  placeholder="AIzaSy..."
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
-                />
-              </div>
-
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-700">
-                <p className="flex items-start">
-                  <Info className="h-4 w-4 mr-1.5 flex-shrink-0 mt-0.5" />
-                  <span>
-                    Don't have a key? Get one for free at{' '}
-                    <a 
-                      href="https://aistudio.google.com/app/apikey" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="underline font-medium hover:text-blue-800"
-                    >
-                      Google AI Studio
-                    </a>.
-                  </span>
-                </p>
-              </div>
-
-              <div className="flex space-x-3 mt-6">
-                <Button 
-                  variant="secondary" 
-                  className="w-full"
-                  onClick={() => setShowSettings(false)}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  variant="primary" 
-                  className="w-full"
-                  onClick={handleSaveSettings}
-                  disabled={!tempApiKey.trim()}
-                >
-                  Save API Key
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <Header />
 
       <main className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
         
